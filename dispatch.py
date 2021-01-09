@@ -205,36 +205,44 @@ class DispatchConsole(wx.Frame):
     self.SetStatusText(fastTimeStr)
 
   def panelToPNG(self):
-    #Create a DC for the whole screen area
-    dcScreen = wx.ClientDC(self)
-    w,h = dcScreen.GetSize()
-    #Create a Bitmap that will later on hold the screenshot image
-    #Note that the Bitmap must have a size big enough to hold the screenshot
-    #-1 means using the current default colour depth
-    bmp = wx.Bitmap(w,h)
+    # Create a DC for the whole screen area
+    panel_device_context = wx.ClientDC(self)
+    panel_width, panel_height = panel_device_context.GetSize()
 
-    #Create a memory DC that will be used for actually taking the screenshot
-    memDC = wx.MemoryDC()
+    # Create a Bitmap that will later on hold the "screenshot" image
+    # Note that the Bitmap must have a size big enough to hold the screenshot
+    panel_bmp = wx.Bitmap(panel_width, panel_height)
+    mem_device_1 = wx.MemoryDC()
 
-    #Tell the memory DC to use our Bitmap
-    #all drawing action on the memory DC will go to the Bitmap now
-    memDC.SelectObject(bmp)
+    # Tell the memory DC to use our Bitmap
+    # all drawing action on the memory DC will go to the Bitmap now
+    mem_device_1.SelectObject(panel_bmp)
 
-    #Blit (in this case copy) the actual screen on the memory DC
-    #and thus the Bitmap
-    memDC.Blit( 0, #Copy to this X coordinate
-      0, #Copy to this Y coordinate
-      w,h,
-      dcScreen, #From where do we copy?
-      0, 0
-    )
+    mem_device_1.SetBackground(wx.Brush('#000'))
+    mem_device_1.Clear()
 
-    #Select the Bitmap out of the memory DC by selecting a new
-    #uninitialized Bitmap
-    memDC.SelectObject(wx.NullBitmap)
-    img = bmp.ConvertToImage()
-    fileName = "myImage.png"
-    img.SaveFile(fileName, wx.BITMAP_TYPE_PNG)
+    mem_device_1.SetBrush(wx.Brush('#000'))
+    mem_device_1.SetPen(wx.Pen("#FFF", width=2))
+
+    for cell in self.cells:
+      cell.draw(mem_device_1)
+
+    # Remove the Bitmap out of the memory DC by selecting a new object for the memory DC to write to
+    mem_device_1.SelectObject(wx.NullBitmap)
+    img = panel_bmp.ConvertToImage()
+    with wx.FileDialog(self, "Save screen image", wildcard="BMP files (*.bmp)|*.bmp",
+                       style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fileDialog:
+
+      if fileDialog.ShowModal() == wx.ID_CANCEL:
+        return  # the user changed their mind
+
+      file_name = fileDialog.GetPath()
+      try:
+        img.SaveFile(file_name, wx.BITMAP_TYPE_BMP)
+      except IOError:
+        wx.LogError("Cannot save current data in file '%s'." % file_name)
+
+
 
   def OnTimer(self, event):
     self.timerCnt += 1
@@ -430,6 +438,7 @@ class DispatchConsole(wx.Frame):
       "Help string shown in status bar for this menu item")
 
     open_item = fileMenu.Append(-1, "&Open")
+    capture_item = fileMenu.Append(-1, "&Capture screen shot")
 
     fileMenu.AppendSeparator()
     # When using a stock ID we don't need to specify the menu item's
@@ -456,6 +465,7 @@ class DispatchConsole(wx.Frame):
     # activated then the associated handler function will be called.
     self.Bind(wx.EVT_MENU, self.OnHello, helloItem)
     self.Bind(wx.EVT_MENU, self.OnMenuItemFileLoad, open_item)
+    self.Bind(wx.EVT_MENU, self.OnScrenShot, capture_item)
     self.Bind(wx.EVT_MENU, self.OnExit,  exitItem)
     self.Bind(wx.EVT_MENU, self.OnAbout, aboutItem)
 
@@ -550,6 +560,8 @@ class DispatchConsole(wx.Frame):
         return
       self.ReInitUI()
 
+  def OnScrenShot(self, event):
+    self.panelToPNG()
 
   def OnHello(self, event):
     """Say hello to the user."""
